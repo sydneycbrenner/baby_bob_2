@@ -5,10 +5,10 @@ from typing import Dict, Any, List, Optional
 import uuid
 
 # Import from our modules
-from sample_data import load_master_config_df, data_columns, save_master_config_df
-from utils import (
+from utils.db_utils import load_master_config_df
+from utils.core_utils import (
     run_backtest, update_approval_status, helper_function, 
-    create_comparison_dataframe, check_both_approved,
+    create_comparison_dataframe, check_approved,
     get_config_for_experiment, get_comparison_data, 
     get_final_summary, create_summary_dataframe
 )
@@ -82,12 +82,12 @@ if 'selected_page' not in st.session_state:
     st.session_state.selected_page = "Config Comparison Tool"
 
 if 'master_config_df' not in st.session_state:
-    # Load the master config DataFrame (or create a fake one if it doesn't exist)
+    # Load the master config DataFrame from SQLite
     st.session_state.master_config_df = load_master_config_df()
 
 # Sidebar for selecting the page
 with st.sidebar:
-    page_options = ["Config Comparison Tool", "2024 Refresh", "babyBob"]
+    page_options = ["Config Comparison Tool", "2024 Refresh", "Summary Table Comparison Tool"]
     selected_page = st.radio("Navigation", page_options)
     st.session_state.selected_page = selected_page
 
@@ -383,18 +383,18 @@ elif st.session_state.selected_page == "2024 Refresh":
     from refresh_2024 import render_2024_refresh_page
     render_2024_refresh_page()
 
-# Page 3: babyBob
-elif st.session_state.selected_page == "babyBob":
-    # Import and render the babyBob page from the separate module
-    from baby_bob import render_baby_bob_page
-    render_baby_bob_page()
+# Page 3: Summary Table Comparison Tool
+elif st.session_state.selected_page == "Summary Table Comparison Tool":
+    # Import and render the Summary Table Comparison Tool page from the utils module
+    from utils.summary_comparison_utils import render_summary_table_comparison
+    render_summary_table_comparison()
 
 # Footer
 st.markdown("---")
 st.markdown(
     """
     <div style="text-align: center; color: #888;">
-        Config Comparison Tool v2.0 | Made with Streamlit
+        Trading Strategy Comparison Suite v2.1 | Made with Streamlit
     </div>
     """,
     unsafe_allow_html=True

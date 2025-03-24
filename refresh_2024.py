@@ -4,8 +4,8 @@ import numpy as np
 from typing import Dict, Any, List, Optional
 
 # Import from our modules
-from sample_data import load_master_config_df, save_master_config_df
-from utils import (
+from utils.db_utils import load_master_config_df
+from utils.core_utils import (
     run_backtest, update_approval_status, 
     get_config_for_experiment, get_comparison_data,
     get_final_summary, create_summary_dataframe,
@@ -110,20 +110,11 @@ def render_2024_refresh_page():
                 st.progress(exp_progress)
                 st.caption(f"{int(exp_progress * 100)}% complete ({exp_completed} of {exp_total} implementations)")
                 
-                # Define list of reviewers - can be configured later
-                reviewers = ["sydney", "joey"]  # This can be expanded to include more reviewers
-                
                 # Get status values for this experiment
-                exp_config_approved = {reviewer: all(exp_df[f'is_approved_config_{reviewer}']) for reviewer in reviewers}
-                all_config_approved = all(exp_config_approved.values())
-                
+                config_approved = all(exp_df['is_approved_config'])
                 backtest_complete = all(exp_df['is_backtest_complete'])
-                
-                exp_comparison_approved = {reviewer: all(exp_df[f'is_approved_comparison_{reviewer}']) for reviewer in reviewers}
-                all_comparison_approved = all(exp_comparison_approved.values())
-                
-                exp_final_approved = {reviewer: all(exp_df[f'is_approved_final_summary_{reviewer}']) for reviewer in reviewers}
-                all_final_approved = all(exp_final_approved.values())
+                comparison_approved = all(exp_df['is_approved_comparison'])
+                final_approved = all(exp_df['is_approved_final_summary'])
                 
                 # Create columns for the workflow stages
                 col1, col2, col3, col4 = st.columns(4)
@@ -132,27 +123,24 @@ def render_2024_refresh_page():
                 with col1:
                     st.markdown("#### Config Review")
                     
-                    # Show approval status for each reviewer
-                    for reviewer in reviewers:
-                        st.markdown(f"##### {reviewer.capitalize()}:")
-                        if exp_config_approved[reviewer]:
-                            st.markdown('<div class="status-green">Approved</div>', unsafe_allow_html=True)
-                            # Show revoke button
-                            if st.button(f"{reviewer.capitalize()} Revoke", key=f"{reviewer}_config_revoke_{experiment}"):
-                                # Update all implementations for this experiment
-                                for impl in unique_implementations:
-                                    update_approval_status(experiment, impl, reviewer, 'config', approve=False)
-                                st.success(f"Config approval revoked by {reviewer.capitalize()} for {experiment}")
-                                st.rerun()
-                        else:
-                            st.markdown('<div class="status-red">Pending</div>', unsafe_allow_html=True)
-                            # Show approval button
-                            if st.button(f"{reviewer.capitalize()} Approve", key=f"{reviewer}_config_{experiment}"):
-                                # Update all implementations for this experiment
-                                for impl in unique_implementations:
-                                    update_approval_status(experiment, impl, reviewer, 'config')
-                                st.success(f"Config approved by {reviewer.capitalize()} for {experiment}")
-                                st.rerun()
+                    if config_approved:
+                        st.markdown('<div class="status-green">Approved</div>', unsafe_allow_html=True)
+                        # Show revoke button
+                        if st.button("Revoke", key=f"config_revoke_{experiment}"):
+                            # Update all implementations for this experiment
+                            for impl in unique_implementations:
+                                update_approval_status(experiment, impl, 'config', approve=False)
+                            st.success(f"Config approval revoked for {experiment}")
+                            st.rerun()
+                    else:
+                        st.markdown('<div class="status-red">Pending</div>', unsafe_allow_html=True)
+                        # Show approval button
+                        if st.button("Approve", key=f"config_{experiment}"):
+                            # Update all implementations for this experiment
+                            for impl in unique_implementations:
+                                update_approval_status(experiment, impl, 'config')
+                            st.success(f"Config approved for {experiment}")
+                            st.rerun()
                                 
                     # Show config details button that redirects to Config Comparison Tool
                     if st.button("View Config in Comparison Tool", key=f"view_config_{experiment}"):
@@ -170,7 +158,7 @@ def render_2024_refresh_page():
                         st.markdown('<div class="status-red">Not Run</div>', unsafe_allow_html=True)
                         
                         # Only enable run backtest if config is approved
-                        if all_config_approved:
+                        if config_approved:
                             if st.button(f"Run Backtest", key=f"run_backtest_{experiment}"):
                                 # Run backtest for all implementations
                                 for impl in unique_implementations:
@@ -191,28 +179,25 @@ def render_2024_refresh_page():
                 with col3:
                     st.markdown("#### Comparison Review")
                     
-                    # Show approval status for each reviewer
-                    for reviewer in reviewers:
-                        st.markdown(f"##### {reviewer.capitalize()}:")
-                        if exp_comparison_approved[reviewer]:
-                            st.markdown('<div class="status-green">Approved</div>', unsafe_allow_html=True)
-                            # Show revoke button
-                            if st.button(f"{reviewer.capitalize()} Revoke", key=f"{reviewer}_comparison_revoke_{experiment}"):
+                    if comparison_approved:
+                        st.markdown('<div class="status-green">Approved</div>', unsafe_allow_html=True)
+                        # Show revoke button
+                        if st.button("Revoke", key=f"comparison_revoke_{experiment}"):
+                            # Update all implementations for this experiment
+                            for impl in unique_implementations:
+                                update_approval_status(experiment, impl, 'comparison', approve=False)
+                            st.success(f"Comparison approval revoked for {experiment}")
+                            st.rerun()
+                    else:
+                        st.markdown('<div class="status-red">Pending</div>', unsafe_allow_html=True)
+                        # Only show approval button if backtest is complete
+                        if backtest_complete:
+                            if st.button("Approve", key=f"comparison_{experiment}"):
                                 # Update all implementations for this experiment
                                 for impl in unique_implementations:
-                                    update_approval_status(experiment, impl, reviewer, 'comparison', approve=False)
-                                st.success(f"Comparison approval revoked by {reviewer.capitalize()} for {experiment}")
+                                    update_approval_status(experiment, impl, 'comparison')
+                                st.success(f"Comparison approved for {experiment}")
                                 st.rerun()
-                        else:
-                            st.markdown('<div class="status-red">Pending</div>', unsafe_allow_html=True)
-                            # Only show approval button if backtest is complete
-                            if backtest_complete:
-                                if st.button(f"{reviewer.capitalize()} Approve", key=f"{reviewer}_comparison_{experiment}"):
-                                    # Update all implementations for this experiment
-                                    for impl in unique_implementations:
-                                        update_approval_status(experiment, impl, reviewer, 'comparison')
-                                    st.success(f"Comparison approved by {reviewer.capitalize()} for {experiment}")
-                                    st.rerun()
                     
                     # Show comparison details button if backtest is complete
                     if backtest_complete:
@@ -242,31 +227,28 @@ def render_2024_refresh_page():
                 with col4:
                     st.markdown("#### Final Review")
                     
-                    # Show approval status for each reviewer
-                    for reviewer in reviewers:
-                        st.markdown(f"##### {reviewer.capitalize()}:")
-                        if exp_final_approved[reviewer]:
-                            st.markdown('<div class="status-green">Approved</div>', unsafe_allow_html=True)
-                            # Show revoke button
-                            if st.button(f"{reviewer.capitalize()} Revoke", key=f"{reviewer}_final_revoke_{experiment}"):
+                    if final_approved:
+                        st.markdown('<div class="status-green">Approved</div>', unsafe_allow_html=True)
+                        # Show revoke button
+                        if st.button("Revoke", key=f"final_revoke_{experiment}"):
+                            # Update all implementations for this experiment
+                            for impl in unique_implementations:
+                                update_approval_status(experiment, impl, 'final_summary', approve=False)
+                            st.success(f"Final summary approval revoked for {experiment}")
+                            st.rerun()
+                    else:
+                        st.markdown('<div class="status-red">Pending</div>', unsafe_allow_html=True)
+                        # Only show approval button if comparison is approved
+                        if comparison_approved:
+                            if st.button("Approve", key=f"final_{experiment}"):
                                 # Update all implementations for this experiment
                                 for impl in unique_implementations:
-                                    update_approval_status(experiment, impl, reviewer, 'final_summary', approve=False)
-                                st.success(f"Final summary approval revoked by {reviewer.capitalize()} for {experiment}")
+                                    update_approval_status(experiment, impl, 'final_summary')
+                                st.success(f"Final summary approved for {experiment}")
                                 st.rerun()
-                        else:
-                            st.markdown('<div class="status-red">Pending</div>', unsafe_allow_html=True)
-                            # Only show approval button if comparison is approved
-                            if all_comparison_approved:
-                                if st.button(f"{reviewer.capitalize()} Approve", key=f"{reviewer}_final_{experiment}"):
-                                    # Update all implementations for this experiment
-                                    for impl in unique_implementations:
-                                        update_approval_status(experiment, impl, reviewer, 'final_summary')
-                                    st.success(f"Final summary approved by {reviewer.capitalize()} for {experiment}")
-                                    st.rerun()
                     
                     # Show final summary details button if comparison is approved
-                    if all_comparison_approved:
+                    if comparison_approved:
                         if st.button("View Final Summary", key=f"view_final_{experiment}"):
                             st.session_state[f"show_final_{experiment}"] = True
                         
