@@ -2,7 +2,9 @@ import sqlite3
 import pandas as pd
 import numpy as np
 import os
+import json
 from typing import List, Dict, Any, Optional, Union
+from collections import OrderedDict
 
 # Path to store the SQLite database
 DB_PATH = r"/Users/sydneyfiller/PycharmProjects/baby_bob/baby_bob.db"
@@ -99,10 +101,30 @@ def create_fake_master_config_data() -> pd.DataFrame:
         experiment = experiments[i % len(experiments)]
         implementation = implementations[i % len(implementations)]
         
-        # Generate frontier data
-        frontier_name = f"frontier_{i+1}"
-        frontier_keys = [f"param_{j}" for j in range(1, 4)]
-        frontier_values = [round(np.random.uniform(0.1, 5.0), 2) for _ in range(3)]
+        # Generate frontier data with different data types
+        # For frontier field, alternate between strings and OrderedDict
+        if i % 3 == 0:
+            frontier_name = f"frontier_{i+1}"
+        else:
+            frontier_name = OrderedDict([('name', f"frontier_{i+1}"), ('category', f"cat_{i % 5}")])
+            
+        # For frontier_keys, use lists, tuples, or OrderedDicts
+        if i % 3 == 0:
+            frontier_keys = [f"param_{j}" for j in range(1, 4)]  # List
+        elif i % 3 == 1:
+            frontier_keys = tuple(f"param_{j}" for j in range(1, 4))  # Tuple
+        else:
+            frontier_keys = OrderedDict([(f"param_{j}", f"desc_{j}") for j in range(1, 4)])  # OrderedDict
+            
+        # For frontier_values, use lists, tuples, or OrderedDicts
+        if i % 3 == 0:
+            frontier_values = [round(np.random.uniform(0.1, 5.0), 2) for _ in range(3)]  # List
+        elif i % 3 == 1:
+            frontier_values = tuple(round(np.random.uniform(0.1, 5.0), 2) for _ in range(3))  # Tuple
+        else:
+            param_names = [f"param_{j}" for j in range(1, 4)]
+            values = [round(np.random.uniform(0.1, 5.0), 2) for _ in range(3)]
+            frontier_values = OrderedDict(zip(param_names, values))  # OrderedDict
         
         # Generate backtest info
         backtest_name = f"bt_{experiment[:3]}_{implementation[:3]}_{i+1}"
@@ -189,11 +211,13 @@ def save_master_config_df(df: pd.DataFrame) -> None:
         if col in df.columns:
             df[col] = df[col].astype(int)
     
-    # Convert list columns to string for storage
-    list_columns = ['frontier_keys', 'frontier_values']
-    for col in list_columns:
+    # Convert complex data types to JSON for storage
+    complex_columns = ['frontier', 'frontier_keys', 'frontier_values']
+    for col in complex_columns:
         if col in df.columns:
-            df[col] = df[col].apply(lambda x: str(x) if isinstance(x, (list, tuple)) else x)
+            df[col] = df[col].apply(
+                lambda x: json.dumps(x) if isinstance(x, (list, tuple, dict, OrderedDict)) else x
+            )
     
     # Remove the primary key column if it exists
     if 'id' in df.columns:
@@ -227,12 +251,14 @@ def load_master_config_df() -> pd.DataFrame:
     # Read the data into a DataFrame
     df = pd.read_sql("SELECT * FROM master_config", conn)
     
-    # Convert string representations of lists back to Python lists
-    list_columns = ['frontier_keys', 'frontier_values']
-    for col in list_columns:
+    # Convert JSON strings back to Python objects (lists, tuples, dicts)
+    complex_columns = ['frontier', 'frontier_keys', 'frontier_values']
+    for col in complex_columns:
         if col in df.columns:
-            # Parse string representation of lists back to actual lists
-            df[col] = df[col].apply(lambda x: eval(x) if isinstance(x, str) and x.startswith('[') else x)
+            # Load JSON strings back to Python objects
+            df[col] = df[col].apply(
+                lambda x: json.loads(x) if isinstance(x, str) and (x.startswith('[') or x.startswith('{')) else x
+            )
     
     # Convert integer boolean columns to actual booleans
     bool_columns = [
@@ -339,11 +365,14 @@ def get_experiment_data(experiment: str) -> pd.DataFrame:
     query = "SELECT * FROM master_config WHERE experiment = ?"
     df = pd.read_sql(query, conn, params=(experiment,))
     
-    # Convert list columns from string to actual lists
-    list_columns = ['frontier_keys', 'frontier_values']
-    for col in list_columns:
+    # Convert JSON strings back to Python objects (lists, tuples, dicts)
+    complex_columns = ['frontier', 'frontier_keys', 'frontier_values']
+    for col in complex_columns:
         if col in df.columns:
-            df[col] = df[col].apply(lambda x: eval(x) if isinstance(x, str) and x.startswith('[') else x)
+            # Load JSON strings back to Python objects
+            df[col] = df[col].apply(
+                lambda x: json.loads(x) if isinstance(x, str) and (x.startswith('[') or x.startswith('{')) else x
+            )
     
     # Convert boolean columns from integers to booleans
     bool_columns = [
@@ -381,11 +410,14 @@ def get_experiment_implementation(experiment: str, implementation: str) -> Optio
     if df.empty:
         return None
     
-    # Convert list columns from string to actual lists
-    list_columns = ['frontier_keys', 'frontier_values']
-    for col in list_columns:
+    # Convert JSON strings back to Python objects (lists, tuples, dicts)
+    complex_columns = ['frontier', 'frontier_keys', 'frontier_values']
+    for col in complex_columns:
         if col in df.columns:
-            df[col] = df[col].apply(lambda x: eval(x) if isinstance(x, str) and x.startswith('[') else x)
+            # Load JSON strings back to Python objects
+            df[col] = df[col].apply(
+                lambda x: json.loads(x) if isinstance(x, str) and (x.startswith('[') or x.startswith('{')) else x
+            )
     
     # Convert boolean columns from integers to booleans
     bool_columns = [
